@@ -233,3 +233,17 @@ yarn build
 ```
 
 You need a running instance of FabstirDB-Backend and set `FABSTIRDB_BACKEND_URL` environment variable to its url.
+Then in your project...
+
+```
+import { createDBClient } from 'fabstirdb-lib';
+
+const dbClient = createDBClient(
+  process.env.NEXT_PUBLIC_FABSTIRDB_BACKEND_URL,
+);
+const user = dbClient.user();
+
+user.create("username1", "mypassword1")
+...
+
+```
