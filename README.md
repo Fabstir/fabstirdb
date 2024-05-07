@@ -224,3 +224,12 @@ Exposes a global OrbitDB instance that implements `user` graph and `Node` databa
 #### Exports
 
 - `dbClient` _(Object)_: Exports `dbClient`.
+
+## Installation and Setup
+
+```
+yarn install
+yarn build
+```
+
+You need a running instance of FabstirDB-Backend and set `FABSTIRDB_BACKEND_URL` environment variable to its url.
