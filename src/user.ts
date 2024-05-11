@@ -1,4 +1,5 @@
 import { updateDbClient, dbClient, resetDbClient } from "./GlobalOrbit";
+import { eventEmitter } from "./eventEmitter";
 import { libsodium } from "./utils/libsodium";
 import { to_base64, base64_variants } from "libsodium-wrappers";
 
@@ -15,6 +16,22 @@ type UserSession = {
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
+
+type User = {
+  create: (alias: string, pass: string, cb: any) => Promise<void>;
+  auth: (alias: string, pass: string, cb: any) => Promise<void>;
+  get: (path: string) => any;
+  logout: () => void;
+  recall: (options?: { sessionStorage?: boolean }) => any | null;
+  session: () => UserSession | null;
+  pair: () => UserKeys | null;
+  exists: (alias: string) => Promise<boolean>;
+  addWriteAcess: (path: string, publicKey: string) => Promise<void>;
+  is: {
+    pub: string;
+    alias: string;
+  };
+};
 
 /**
  * `user` is an object that provides methods for user management.
@@ -33,7 +50,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
  * @property {Function} addWriteAcess - Asynchronously adds write access to a specified path for a user with a given public key.
  * @property {Object} is - An object with a getter for the public key of the current user session.
  */
-const user = {
+const user: User = {
   /**
    * Asynchronously creates a new user with the given alias and password.
    *
@@ -179,7 +196,6 @@ const user = {
         throw new Error(authData.message || "Authentication failed.");
       }
 
-      // Assuming authData contains the public and private keys
       sessionStorage.setItem(
         "userSession",
         JSON.stringify({
@@ -193,6 +209,15 @@ const user = {
       cb(null, {
         token: authData.token,
         keys: { pub: authData.publicKey, priv: authData.privateKey },
+      });
+
+      // Emit an event upon successful authentication
+      eventEmitter.emit("auth", {
+        success: true,
+        message: "Authentication successful",
+        alias,
+        keys: { pub: authData.publicKey, priv: authData.privateKey },
+        token: authData.token,
       });
     } catch (error) {
       console.error("Authentication error:", error);
@@ -229,7 +254,32 @@ const user = {
    *
    * @returns {UserSession | null} The user's session data if a session exists, or null if no session is found.
    */
-  recall: function (): UserSession | null {
+  recall: function ({
+    sessionStorage: useSessionStorage = true,
+  }: {
+    sessionStorage?: boolean;
+  } = {}): User | null {
+    if (!useSessionStorage) throw new Error("Session storage is not available");
+
+    const sessionData = sessionStorage.getItem("userSession");
+    if (sessionData) {
+      const session: UserSession = JSON.parse(sessionData);
+      updateDbClient(session.keys.pub); // Reconfigure client with current user's public key
+      return user;
+    }
+    resetDbClient(); // No session, reset client
+    return null;
+  },
+
+  /**
+   * Retrieves the user's session data from the session storage.
+   *
+   * If a session is found, it reconfigures the OrbitDB client with the user's public key and returns the session data.
+   * If no session is found, it resets the OrbitDB client and returns null.
+   *
+   * @returns {UserSession | null} The user's session data if a session exists, or null if no session is found.
+   */
+  session: function (): UserSession | null {
     const sessionData = sessionStorage.getItem("userSession");
     if (sessionData) {
       const session: UserSession = JSON.parse(sessionData);
@@ -246,7 +296,7 @@ const user = {
    * @returns {UserKeys | null} The user's key pair if a session exists, or null if no session is found.
    */
   pair: (): UserKeys | null => {
-    const session = user.recall();
+    const session = user.recall({ sessionStorage: true });
     return session ? session.keys : null;
   },
 
@@ -322,6 +372,14 @@ const user = {
       if (sessionData) {
         const { keys } = JSON.parse(sessionData);
         return keys.pub;
+      }
+      throw new Error("No active session found");
+    },
+    get alias() {
+      const sessionData = sessionStorage.getItem("userSession");
+      if (sessionData) {
+        const { alias } = JSON.parse(sessionData);
+        return alias;
       }
       throw new Error("No active session found");
     },

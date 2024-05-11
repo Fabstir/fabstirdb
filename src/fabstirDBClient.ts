@@ -2,6 +2,7 @@ import crypto from "crypto";
 import user from "./user";
 import { config } from "dotenv";
 import { dbUrl } from "./GlobalOrbit";
+import { eventEmitter } from "./eventEmitter";
 config();
 
 /**
@@ -29,6 +30,7 @@ type Node = {
     onError?: (error: Error) => void
   ) => Promise<void>;
   load: () => Promise<any>;
+  path: () => string;
   once: (callback: (data: any) => void) => void;
 };
 
@@ -84,14 +86,24 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
         const token = sessionData ? sessionData.token : null;
 
         try {
-          const response = await fetch(`${baseUrl}/${fullPath}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
-            },
-            body: JSON.stringify(data),
-          });
+          const options = data
+            ? {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
+                },
+                body: JSON.stringify(data),
+              }
+            : {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "", // Set to an empty string
+                  Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
+                },
+              };
+
+          const response = await fetch(`${baseUrl}/${fullPath}`, options);
 
           if (!response.ok) {
             const result = await response.text();
@@ -178,6 +190,13 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
       },
 
       /**
+       * Returns the full path.
+       *
+       * @returns {string} The full path.
+       */
+      path: () => fullPath,
+
+      /**
        * Asynchronously loads data from the node and calls the provided callback function once with the first item in the loaded data.
        *
        * This function sends a load request to the node and returns a Promise that resolves with an array of data.
@@ -200,9 +219,10 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
 
   return {
     get,
-    user: function (userPub: string) {
-      if (userPub) return fabstirDBClient(baseUrl, userPub);
-      else return user;
+    user: (userPub?: string) =>
+      userPub ? fabstirDBClient(baseUrl, userPub) : user,
+    on: (event: string, listener: (data: any) => void) => {
+      eventEmitter.on(event, listener);
     },
   };
 }

@@ -4,4 +4,6 @@
  *
  * @returns {Object} An instance of DBClient.
  */
-export { default as createDBClient } from "./GlobalOrbit";
+import createDBClient from "./GlobalOrbit";
+
+export default createDBClient;

@@ -105,7 +105,11 @@ console.log(dataAgain.message); // "hello world"
 
 - `logout` _(Function)_: Logs out the current user by removing their session data from the session storage.
 
-- `recall` _(Function)_: Retrieves the user's session data from the session storage.
+- `recall` _(Function)_: Retrieves the user object from the session storage.
+
+  - **Returns**: The user object if a session exists, or null if no session is found.
+
+- `session` _(Function)_: Retrieves the user's session data from the session storage.
 
   - **Returns**: The user's session data if a session exists, or null if no session is found.
 
@@ -154,15 +158,18 @@ Interface for a Node object that represents a node in the database. It provides 
 
   - **Returns**: A Promise that resolves with the data retrieved from the specified key.
 
-- `put` _(Function)_: Asynchronously sends data to the server. If provided, calls onSuccess with the result or onError with any errors.
+- `put` _(Function)_: Asynchronously sends data to the server. If provided, calls onSuccess with the result or onError with any errors. If the path includes a hash,
 
-  - **Parameters**:
+  - the data is saved immutabiy under a content-addressed hash after verifying that the provided hash matches the calculated hash of the data.
+  - If the path does not include a hash, the data is saved directly under the path.
+
+  * **Parameters**:
 
     - `data` _(any)_: The data to be sent in the request body.
     - `onSuccess` _(function)_: A callback function to be called if the request is successful.
     - `onError` _(function)_: A callback function to be called if the request fails.
 
-  - **Returns**: A Promise that resolves when the operation is complete.
+  * **Returns**: A Promise that resolves when the operation is complete.
 
 - `set` _(Function)_: Asynchronously adds a unique item to an unordered list. If provided, calls onSuccess with the result or onError with any errors.
 
@@ -178,10 +185,15 @@ Interface for a Node object that represents a node in the database. It provides 
 
   - **Returns**: A Promise that resolves with the data fetched from the server.
 
-- `once` _(Function)_: Loads data from the node and calls the provided callback function once with the first item in the loaded data so make sure you only expect one item.
+- `path` _(Function)_: Retrieves the full path of any node at any depth.
+
+  - **Returns**: Returns the full path of the node.
+
+- `once` _(Function)_: Loads data from the node and calls the provided callback function once with the first item in the loaded data so ensure that only one item is expected.
 
   - **Parameters**:
     - `callback` _(function)_: A callback function to be called once with the first item in the loaded data.
+  - **Returns**: A Promise that resolves with the data for a single item fetched from the server.
 
 ---
 

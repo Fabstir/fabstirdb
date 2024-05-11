@@ -16,7 +16,7 @@ export let dbUrl: string;
  * @param {string} userPubKey - The public key of the user.
  * @returns {Object} An instance of the OrbitDB client, providing methods for interacting with the database.
  */
-export const createDBClient = (databaseUrl: string, userPubKey: string) => {
+const createDBClient = (databaseUrl: string, userPubKey: string) => {
   dbUrl = databaseUrl;
   dbClient = fabstirDBClient(dbUrl || "", userPubKey);
 
