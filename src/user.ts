@@ -367,6 +367,12 @@ const user: User = {
 
   // Define the 'is' property with a getter for the public key
   is: {
+    /**
+     * Gets the public key from the current user session.
+     *
+     * @returns {string} The public key.
+     * @throws {Error} If no active session is found.
+     */
     get pub() {
       const sessionData = sessionStorage.getItem("userSession");
       if (sessionData) {
@@ -375,6 +381,13 @@ const user: User = {
       }
       throw new Error("No active session found");
     },
+
+    /**
+     * Gets the user's alias from the current user session.
+     *
+     * @returns {string} The alias.
+     * @throws {Error} If no active session is found.
+     */
     get alias() {
       const sessionData = sessionStorage.getItem("userSession");
       if (sessionData) {

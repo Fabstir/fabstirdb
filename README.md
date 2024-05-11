@@ -144,6 +144,10 @@ console.log(dataAgain.message); // "hello world"
 
       - **Throws**: Will throw an error if no active session is found.
 
+    - `alias` _(Getter)_: Returns the user's alias of the current user session.
+
+      - **Throws**: Will throw an error if no active session is found.
+
 ## Interface: `Node`
 
 Interface for a Node object that represents a node in the database. It provides methods for getting, putting, setting, loading data, and performing a one-time operation.
