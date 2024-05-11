@@ -103,7 +103,10 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                 },
               };
 
-          const response = await fetch(`${baseUrl}/${fullPath}`, options);
+          const response = await fetch(
+            `${baseUrl}/${encodeURIComponent(fullPath)}`,
+            options
+          );
 
           if (!response.ok) {
             const result = await response.text();
@@ -168,14 +171,18 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        */
       load: () => {
         return new Promise((resolve, reject) => {
-          fetch(`${baseUrl}/${fullPath}`)
+          fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
             .then((response) => {
               if (!response.ok) {
                 reject(new Error("Failed to fetch data"));
               } else {
                 response
                   .json()
-                  .then(resolve)
+                  .then((data) => {
+                    // Transform the array of objects into an array of `data` property values
+                    const transformedData = data.map((item: any) => item.data);
+                    resolve(transformedData);
+                  })
                   .catch(() => {
                     reject(new Error("Failed to parse response"));
                   });
@@ -205,13 +212,13 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        *
        * @param {function} callback - A callback function to be called once with the first item in the loaded data.
        */
-      once: (callback) => {
-        node
-          .load()
-          .then((array) => {
-            callback(array.length > 0 ? array[0] : undefined);
-          })
-          .catch(console.error);
+      once: async (callback) => {
+        try {
+          const array = await node.load();
+          callback(array.length > 0 ? array[0] : undefined);
+        } catch (error) {
+          console.error(error);
+        }
       },
     };
     return node;
