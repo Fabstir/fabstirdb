@@ -125,7 +125,7 @@ console.log(dataAgain.message); // "hello world"
 
   - **Returns**: A Promise that resolves to true if the user exists, otherwise false.
 
-- `addWriteAccess` _(Function)_: Asynchronously adds write access to a specified path for a user with a given public key.
+- `addWriteAccess` _(Function)_: Asynchronously adds write access to a specified path for a user with a given public key or '\*' to grant write access to all users.
 
   - **Parameters**:
 
