@@ -30,7 +30,7 @@ type User = {
   is: {
     pub: string;
     alias: string;
-  };
+  } | null;
 };
 
 /**
@@ -366,36 +366,44 @@ const user: User = {
   },
 
   // Define the 'is' property with a getter for the public key
-  is: {
-    /**
-     * Gets the public key from the current user session.
-     *
-     * @returns {string} The public key.
-     * @throws {Error} If no active session is found.
-     */
-    get pub() {
-      const sessionData = sessionStorage.getItem("userSession");
-      if (sessionData) {
-        const { keys } = JSON.parse(sessionData);
-        return keys.pub;
-      }
-      throw new Error("No active session found");
-    },
+  get is() {
+    const sessionData = sessionStorage.getItem("userSession");
 
-    /**
-     * Gets the user's alias from the current user session.
-     *
-     * @returns {string} The alias.
-     * @throws {Error} If no active session is found.
-     */
-    get alias() {
-      const sessionData = sessionStorage.getItem("userSession");
-      if (sessionData) {
-        const { alias } = JSON.parse(sessionData);
-        return alias;
-      }
-      throw new Error("No active session found");
-    },
+    if (!sessionData) {
+      return null;
+    }
+
+    let sessionObj = null;
+
+    try {
+      sessionObj = JSON.parse(sessionData);
+    } catch (e) {
+      // sessionData is not a valid JSON string, ignore the error
+    }
+
+    return sessionObj && Object.keys(sessionObj).length > 0
+      ? {
+          /**
+           * Gets the public key from the current user session.
+           *
+           * @returns {string} The public key.
+           */
+          get pub() {
+            const { keys } = sessionObj;
+            return keys.pub;
+          },
+
+          /**
+           * Gets the user's alias from the current user session.
+           *
+           * @returns {string} The alias.
+           */
+          get alias() {
+            const { alias } = sessionObj;
+            return alias;
+          },
+        }
+      : null;
   },
 };
 
