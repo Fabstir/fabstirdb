@@ -32,6 +32,9 @@ type User = {
   addWriteAcess: (path: string, publicKey: string) => Promise<void>;
   is: {
     pub: string;
+    priv: string;
+    epub: string;
+    epriv: string;
     alias: string;
   } | null;
 };
@@ -72,15 +75,7 @@ const user: User = {
   create: async (alias: string, pass: string, cb: any) => {
     try {
       await libsodium.ensureReady();
-      const keys = await libsodium.generateKeyPairFromSeed(alias, pass);
-      const publicKey = to_base64(
-        keys.publicKey,
-        base64_variants.URLSAFE_NO_PADDING
-      );
-      const privateKey = to_base64(
-        keys.privateKey,
-        base64_variants.URLSAFE_NO_PADDING
-      );
+      const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
       const hashedPassword = await libsodium.hashPassword(pass);
 
       const tempTokenResponse = await fetch(
@@ -109,7 +104,7 @@ const user: User = {
           },
           body: JSON.stringify({
             alias,
-            publicKey,
+            publicKey: keys.pub,
             hashedPassword,
           }),
         }
@@ -120,11 +115,19 @@ const user: User = {
         throw new Error(registerData.message || "Registration failed.");
       }
 
-      cb(null, {
-        token: registerData.token,
-        keys: { pub: publicKey, priv: privateKey },
-      });
-      updateDbClient(publicKey);
+      cb(
+        { err: "" },
+        {
+          token: registerData.token,
+          keys: {
+            pub: keys.pub,
+            priv: keys.priv,
+            epub: keys.epub,
+            epriv: keys.epriv,
+          },
+        }
+      );
+      updateDbClient(keys.pub);
     } catch (error) {
       console.error("Failed to create user:", error);
       cb(error);
@@ -148,15 +151,7 @@ const user: User = {
   auth: async (alias: string, pass: string, cb: any) => {
     try {
       await libsodium.ensureReady();
-      const keys = await libsodium.generateKeyPairFromSeed(alias, pass);
-      const publicKey = to_base64(
-        keys.publicKey,
-        base64_variants.URLSAFE_NO_PADDING
-      );
-      const privateKey = to_base64(
-        keys.privateKey,
-        base64_variants.URLSAFE_NO_PADDING
-      );
+      const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
 
       const tempTokenResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/request-token`,
@@ -186,25 +181,34 @@ const user: User = {
         }
       );
 
-      const authData = await authResponse.json();
       if (!authResponse.ok) {
-        throw new Error(authData.message || "Authentication failed.");
+        cb({ err: (await authResponse.text()) || "Authentication failed." });
+        return;
       }
+      const authData = await authResponse.json();
 
       sessionStorage.setItem(
         "userSession",
         JSON.stringify({
           alias,
           token: authData.token,
-          keys: { pub: publicKey, priv: privateKey },
+          keys: {
+            pub: keys.pub,
+            priv: keys.priv,
+            epub: keys.epub,
+            epriv: keys.epriv,
+          },
         })
       );
 
       updateDbClient(authData.publicKey);
-      cb(null, {
-        token: authData.token,
-        keys: { pub: authData.publicKey, priv: authData.privateKey },
-      });
+      cb(
+        { err: "" },
+        {
+          token: authData.token,
+          keys: { pub: authData.publicKey, priv: authData.privateKey },
+        }
+      );
 
       // Emit an event upon successful authentication
       eventEmitter.emit("auth", {
@@ -305,8 +309,13 @@ const user: User = {
    */
   _: {
     get sea() {
-      const session = user.recall({ sessionStorage: true });
-      return session ? session.keys : null;
+      if (!user.is) return null;
+
+      const pub = user.is.pub;
+      const priv = user.is.priv;
+      const epub = user.is.epub;
+      const epriv = user.is.epriv;
+      return { pub, priv, epub, epriv };
     },
   },
 
@@ -407,6 +416,21 @@ const user: User = {
           get pub() {
             const { keys } = sessionObj;
             return keys.pub;
+          },
+
+          get priv() {
+            const { keys } = sessionObj;
+            return keys.priv;
+          },
+
+          get epub() {
+            const { keys } = sessionObj;
+            return keys.epub;
+          },
+
+          get epriv() {
+            const { keys } = sessionObj;
+            return keys.epriv;
           },
 
           /**

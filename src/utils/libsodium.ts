@@ -3,6 +3,7 @@ import {
   ready,
   from_string,
   to_string,
+  to_hex,
   crypto_sign_keypair,
   crypto_sign,
   crypto_sign_open,
@@ -10,6 +11,7 @@ import {
   crypto_secretbox_easy,
   crypto_secretbox_KEYBYTES,
   crypto_secretbox_open_easy,
+  crypto_box_seed_keypair,
   to_base64,
   from_base64,
   randombytes_buf,
@@ -35,6 +37,29 @@ export const libsodium = {
       await ready;
       this.ready = true;
     }
+  },
+
+  async generateKeyPairsFromPassword(username: string, password: string) {
+    await this.ensureReady();
+
+    // Generate a seed from the username and password
+    const seedInput = username + ":" + password; // Use a delimiter for better security
+    const seed = crypto_generichash(32, from_string(seedInput));
+
+    // Generate an Ed25519 key pair for signing from the seed
+    const signKeys = crypto_sign_seed_keypair(seed);
+
+    // Generate a Curve25519 key pair for encryption from the same seed
+    // If you need to derive encryption keys from the signing keys (not recommended), you could convert them.
+    // However, to use the same seed to directly generate encryption keys:
+    const encryptKeys = crypto_box_seed_keypair(seed);
+
+    return {
+      pub: to_hex(signKeys.publicKey),
+      priv: to_hex(signKeys.privateKey),
+      epub: to_hex(encryptKeys.publicKey),
+      epriv: to_hex(encryptKeys.privateKey),
+    };
   },
 
   async generateKeyPairFromSeed(username: string, password: string) {

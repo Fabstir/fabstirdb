@@ -4,7 +4,7 @@ declare module "libsodium-wrappers" {
 
   export function from_string(data: string): Uint8Array;
   export function to_string(data: Uint8Array): string;
-
+  export function to_hex(data: Uint8Array): string;
   export function to_base64(data: Uint8Array, variant: number): string;
   export function from_base64(data: string, variant: number): Uint8Array;
 
@@ -57,6 +57,11 @@ declare module "libsodium-wrappers" {
     input: Uint8Array,
     key?: Uint8Array
   ): Uint8Array;
+
+  export function crypto_box_seed_keypair(seed: Uint8Array): {
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
+  };
 
   export const crypto_pwhash_ALG_ARGON2ID13: number;
   export const crypto_pwhash_OPSLIMIT_INTERACTIVE: number;
