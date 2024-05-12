@@ -25,6 +25,9 @@ type User = {
   recall: (options?: { sessionStorage?: boolean }) => any | null;
   session: () => UserSession | null;
   pair: () => UserKeys | null;
+  _: {
+    sea: UserKeys | null;
+  };
   exists: (alias: string) => Promise<boolean>;
   addWriteAcess: (path: string, publicKey: string) => Promise<void>;
   is: {
@@ -235,8 +238,11 @@ const user: User = {
   get: function (path: string) {
     const session = sessionStorage.getItem("userSession");
     if (session) {
-      const { keys } = JSON.parse(session);
-      return dbClient.user(keys.pub).get(path);
+      const sessionObj = JSON.parse(session);
+      if (path === "alias") {
+        return sessionObj.alias;
+      }
+      return dbClient.user(sessionObj.keys.pub).get(path);
     }
     throw new Error("User is not logged in");
   },
@@ -298,6 +304,18 @@ const user: User = {
   pair: (): UserKeys | null => {
     const session = user.recall({ sessionStorage: true });
     return session ? session.keys : null;
+  },
+
+  /**
+   * Retrieves the user's key pair from the current session.
+   *
+   * @returns {UserKeys | null} The user's key pair if a session exists, or null if no session is found.
+   */
+  _: {
+    get sea() {
+      const session = user.recall({ sessionStorage: true });
+      return session ? session.keys : null;
+    },
   },
 
   // Update the `exists` function to check for the existence of a user based on ACL entries.

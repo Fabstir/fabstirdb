@@ -214,8 +214,14 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        */
       once: async (callback) => {
         try {
-          const array = await node.load();
-          callback(array.length > 0 ? array[0] : undefined);
+          if (fullPath && fullPath.startsWith("~@")) {
+            const alias = fullPath.substring(2);
+            const exists = await user.exists(alias);
+            callback(exists ? {} : undefined);
+          } else {
+            const array = await node.load();
+            callback(array.length > 0 ? array[0] : undefined);
+          }
         } catch (error) {
           console.error(error);
         }
