@@ -1,6 +1,6 @@
 {
   "name": "fabstirdb-lib",
-  "version": "1.0.30",
+  "version": "1.0.32",
   "description": "",
   "main": "dist/cjs/index.js",
   "module": "dist/index.js",

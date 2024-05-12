@@ -59,7 +59,8 @@ const user: User = {
    *
    * This function generates a key pair from the alias and password, hashes the password,
    * requests a temporary token from the backend, and then sends a registration request to the backend.
-   * If the registration is successful, it stores the user's session data in the session storage and updates the OrbitDB client.
+   * If the registration is successful, it returns the user's token and keys via the callback function and updates the OrbitDB client.
+   * It does not log the user in or store the user's session data in the session storage.
    *
    * @async
    * @param {string} alias - The alias of the new user.
@@ -118,15 +119,6 @@ const user: User = {
       if (!registerResponse.ok) {
         throw new Error(registerData.message || "Registration failed.");
       }
-
-      sessionStorage.setItem(
-        "userSession",
-        JSON.stringify({
-          alias,
-          token: registerData.token,
-          keys: { pub: publicKey, priv: privateKey },
-        })
-      );
 
       cb(null, {
         token: registerData.token,
@@ -318,12 +310,19 @@ const user: User = {
     },
   },
 
-  // Update the `exists` function to check for the existence of a user based on ACL entries.
+  /**
+   * Asynchronously checks if a user with the given alias exists.
+   *
+   * This function sends a GET request to the /acl/{alias} endpoint of the backend.
+   * If the request is successful and the response data indicates that the user exists, it returns true.
+   * Otherwise, it returns false.
+   *
+   * @async
+   * @param {string} alias - The alias of the user to check.
+   * @throws Will log an error to the console if the request fails.
+   * @returns {Promise<boolean>} Returns a Promise that resolves to a boolean indicating whether the user exists.
+   */
   exists: async (alias: string) => {
-    const session = sessionStorage.getItem("userSession");
-    const sessionData = session ? JSON.parse(session) : null;
-    const token = sessionData ? sessionData.token : null;
-
     try {
       // alias is the username to check for existence
       const aclResponse = await fetch(
@@ -332,7 +331,6 @@ const user: User = {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
         }
       );

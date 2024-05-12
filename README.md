@@ -117,7 +117,7 @@ console.log(dataAgain.message); // "hello world"
 
   - **Returns**: The user's key pair if a session exists, or null if no session is found.
 
-- `exists` _(Function)_: Checks if a user exists based on ACL entries.
+- `exists` _(Function)_: Asynchronously checks if a user's alias exists. Equivalent to `.get(`~@${alias}`).once...` syntax, except returns a boolean rather than an object or null.
 
   - **Parameters**:
 
@@ -193,7 +193,7 @@ Interface for a Node object that represents a node in the database. It provides 
 
   - **Returns**: Returns the full path of the node.
 
-- `once` _(Function)_: Loads data from the node and calls the provided callback function once with the first item in the loaded data so ensure that only one item is expected.
+- `once` _(Function)_: Asynchronously loads data from the node and calls the provided callback function once with the first item in the loaded data so ensure that only one item is expected.
 
   - **Parameters**:
     - `callback` _(function)_: A callback function to be called once with the first item in the loaded data.
