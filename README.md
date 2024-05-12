@@ -263,3 +263,7 @@ user.create("username1", "mypassword1")
 ...
 
 ```
+
+## Footnote
+
+The interface to FabstirDB is based on GUN API. To use GUN itself, please go to [GUN API Documentation](https://gun.eco/docs/API)
