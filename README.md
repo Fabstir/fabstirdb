@@ -33,13 +33,13 @@ Only the logged in user can write to their user graph unless that user grants ac
 ```
 user.create("username1", "mypassword1")
 const userPub1 = user.is.pub
-user.logout();
+user.leave();
 
 user.create("username2", "mypassword2")
 const userPub2 = user.is.pub
 
 await user.addWriteAcess(`users/${userPub1}/test`, userPub1);
-user.logout();
+user.leave();
 
 user.auth("username1", "mypassword1")
 await dbClient
@@ -47,12 +47,12 @@ await dbClient
   .get("test")
   .get("1")
   .put({message: "hello world"});
-user.logout();
+user.leave();
 
 user.auth("username2", "mypassword2")
 const dataEntries = await dbClient.get('test').load();
 const data = dataEntries[0];
-user.logout();
+user.leave();
 
 user.auth("username1", "mypassword1")
 const dataAgain = await dbClient.user(userPub2).get('test').get('1').once();
@@ -103,7 +103,7 @@ console.log(dataAgain.message); // "hello world"
 
   - **Returns**: The data retrieved from the specified path.
 
-- `logout` _(Function)_: Logs out the current user by removing their session data from the session storage.
+- `leave` _(Function)_: Logs out the current user by removing their session data from the session storage.
 
 - `recall` _(Function)_: Retrieves the user object from the session storage.
 

@@ -93,7 +93,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
                 },
-                body: JSON.stringify(data),
+                body: JSON.stringify({ value: data }),
               }
             : {
                 method: "DELETE",
@@ -170,11 +170,17 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @throws {Error} Will throw an error if the request fails or if the response cannot be parsed.
        */
       load: () => {
+        if (!fullPath) {
+          return Promise.resolve(undefined);
+        }
+
         return new Promise((resolve, reject) => {
           fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
             .then((response) => {
               if (!response.ok) {
-                reject(new Error("Failed to fetch data"));
+                resolve(undefined);
+                //                reject(new Error("Failed to fetch data"));
+                // Resolve with an empty array instead of rejecting with an error
               } else {
                 response
                   .json()
@@ -214,13 +220,27 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        */
       once: async (callback) => {
         try {
+          if (fullPath === "") {
+            callback(undefined);
+            return;
+          }
+
+          if (path === "alias" || path.endsWith("/alias")) {
+            const session = sessionStorage.getItem("userSession");
+            if (session) {
+              const sessionObj = JSON.parse(session);
+              callback(sessionObj.alias);
+            } else callback(undefined);
+            return;
+          }
+
           if (fullPath && fullPath.startsWith("~@")) {
             const alias = fullPath.substring(2);
             const exists = await user.exists(alias);
             callback(exists ? {} : undefined);
           } else {
             const array = await node.load();
-            callback(array.length > 0 ? array[0] : undefined);
+            callback(array?.length > 0 ? array[0] : undefined);
           }
         } catch (error) {
           console.error(error);

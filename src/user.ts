@@ -21,7 +21,7 @@ type User = {
   create: (alias: string, pass: string, cb: any) => Promise<void>;
   auth: (alias: string, pass: string, cb: any) => Promise<void>;
   get: (path: string) => any;
-  logout: () => void;
+  leave: () => void;
   recall: (options?: { sessionStorage?: boolean }) => any | null;
   session: () => UserSession | null;
   pair: () => UserKeys | null;
@@ -49,7 +49,7 @@ type User = {
  * @property {Function} create - Asynchronously creates a new user with the given alias and password.
  * @property {Function} auth - Asynchronously authenticates a user with the given alias and password.
  * @property {Function} get - Retrieves data from a specified path for the current user session.
- * @property {Function} logout - Logs out the current user by removing their session data from the session storage.
+ * @property {Function} leave - Logs out the current user by removing their session data from the session storage.
  * @property {Function} recall - Retrieves the user's session data from the session storage.
  * @property {Function} pair - Retrieves the user's key pair from the current session.
  * @property {Function} exists - Checks if a user exists based on ACL entries.
@@ -235,15 +235,12 @@ const user: User = {
     const session = sessionStorage.getItem("userSession");
     if (session) {
       const sessionObj = JSON.parse(session);
-      if (path === "alias") {
-        return sessionObj.alias;
-      }
       return dbClient.user(sessionObj.keys.pub).get(path);
     }
-    throw new Error("User is not logged in");
+    return dbClient.get("");
   },
 
-  logout: () => {
+  leave: () => {
     sessionStorage.removeItem("userSession");
     resetDbClient();
   },
