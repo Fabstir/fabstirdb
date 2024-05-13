@@ -73,6 +73,8 @@ const user: User = {
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
   create: async (alias: string, pass: string, cb: any) => {
+    cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
     try {
       await libsodium.ensureReady();
       const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
@@ -115,22 +117,29 @@ const user: User = {
         throw new Error(registerData.message || "Registration failed.");
       }
 
+      updateDbClient(keys.pub);
       cb(
-        { err: "" },
+        { err: undefined },
         {
           token: registerData.token,
-          keys: {
-            pub: keys.pub,
-            priv: keys.priv,
-            epub: keys.epub,
-            epriv: keys.epriv,
-          },
+          keys,
         }
       );
-      updateDbClient(keys.pub);
+      // Emit an event upon successful authentication
+      eventEmitter.emit("create", {
+        success: true,
+        message: registerData.message,
+        alias,
+        keys,
+        token: registerData.token,
+      });
     } catch (error) {
-      console.error("Failed to create user:", error);
-      cb(error);
+      if (error instanceof Error) {
+        console.error("Failed to create user:", error);
+        cb({ err: error.message });
+      } else {
+        cb({ err: "unknown error" });
+      }
     }
   },
 
@@ -149,6 +158,8 @@ const user: User = {
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
   auth: async (alias: string, pass: string, cb: any) => {
+    cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
     try {
       await libsodium.ensureReady();
       const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
@@ -192,35 +203,34 @@ const user: User = {
         JSON.stringify({
           alias,
           token: authData.token,
-          keys: {
-            pub: keys.pub,
-            priv: keys.priv,
-            epub: keys.epub,
-            epriv: keys.epriv,
-          },
+          keys,
         })
       );
 
       updateDbClient(authData.publicKey);
       cb(
-        { err: "" },
+        { err: undefined },
         {
           token: authData.token,
-          keys: { pub: authData.publicKey, priv: authData.privateKey },
+          keys,
         }
       );
 
       // Emit an event upon successful authentication
       eventEmitter.emit("auth", {
         success: true,
-        message: "Authentication successful",
+        message: authData.message,
         alias,
-        keys: { pub: authData.publicKey, priv: authData.privateKey },
+        keys,
         token: authData.token,
       });
     } catch (error) {
-      console.error("Authentication error:", error);
-      cb(error);
+      if (error instanceof Error) {
+        console.error("Authentication error:", error);
+        cb({ err: error.message });
+      } else {
+        cb({ err: "unknown error" });
+      }
     }
   },
 
@@ -330,6 +340,8 @@ const user: User = {
    */
   exists: async (alias: string) => {
     try {
+      alias = encodeURIComponent(alias);
+
       // alias is the username to check for existence
       const aclResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/acl/${alias}`,

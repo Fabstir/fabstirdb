@@ -2,17 +2,19 @@ type Node = {
   get: (key: string) => Node;
   put: (
     data: any,
-    onSuccess?: (result: any) => void,
-    onError?: (error: Error) => void
-  ) => Promise<void>;
+    callback?: (errorObject: { err: any; name: string }) => void
+  ) => Promise<{ err: any; name: string }>;
   set: (
-    target: Node,
-    onSuccess?: (result: any) => void,
-    onError?: (error: Error) => void
-  ) => Promise<void>;
-  load: () => Promise<any>;
+    target: any,
+    callback?: (errorObject: { err: any }) => void
+  ) => Promise<{ err: any }>;
+  load: (
+    callback?: (error: any, data?: any[]) => void
+  ) => Promise<any[] | undefined>;
   path: () => string;
-  once: (callback: (data: any) => void) => void;
+  once: (
+    callback?: (error: any, data?: any) => void
+  ) => Promise<{ err: any; data?: any }>;
 };
 
 declare module "fabstirdb-lib" {

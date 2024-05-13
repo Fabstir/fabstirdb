@@ -21,17 +21,19 @@ type Node = {
   get: (key: string) => Node;
   put: (
     data: any,
-    onSuccess?: (result: any) => void,
-    onError?: (error: Error) => void
-  ) => Promise<void>;
+    callback?: (errorObject: { err: any; name: string }) => void
+  ) => Promise<{ err: any; name: string }>;
   set: (
-    target: Node,
-    onSuccess?: (result: any) => void,
-    onError?: (error: Error) => void
-  ) => Promise<void>;
-  load: () => Promise<any>;
+    target: any,
+    callback?: (errorObject: { err: any }) => void
+  ) => Promise<{ err: any }>;
+  load: (
+    callback?: (error: any, data?: any[]) => void
+  ) => Promise<any[] | undefined>;
   path: () => string;
-  once: (callback: (data: any) => void) => void;
+  once: (
+    callback?: (error: any, data?: any) => void
+  ) => Promise<{ err: any; data?: any }>;
 };
 
 /**
@@ -76,59 +78,56 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @param {function} onError - A callback function to be called if the request fails.
        * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
        */
-      put: async (
-        data,
-        onSuccess?: (result: any) => void,
-        onError?: (ack: AckError) => void
-      ) => {
+      put: async (data: any, cb: any) => {
+        cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
         const session = sessionStorage.getItem("userSession");
         const sessionData = session ? JSON.parse(session) : null;
         const token = sessionData ? sessionData.token : null;
 
-        try {
-          const options = data
-            ? {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
-                },
-                body: JSON.stringify({ value: data }),
-              }
-            : {
-                method: "DELETE",
-                headers: {
-                  "Content-Type": "", // Set to an empty string
-                  Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
-                },
-              };
+        const options = data
+          ? {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
+              },
+              body: JSON.stringify({ value: data }),
+            }
+          : {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "", // Set to an empty string
+                Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
+              },
+            };
 
+        try {
           const response = await fetch(
             `${baseUrl}/${encodeURIComponent(fullPath)}`,
             options
           );
-
           if (!response.ok) {
             const result = await response.text();
-            onError?.({
-              err: new Error(result),
-              name: "NetworkError",
-              message: result,
-            });
+            const errorObject = { err: result, name: "NetworkError" };
+            cb(errorObject);
+            return errorObject;
           } else {
             const result = await response.json();
-            onSuccess?.({ err: undefined, name: "", message: "" });
+            const successObject = { err: undefined, name: "" };
+            cb(successObject);
+            return successObject;
           }
         } catch (error) {
-          onError?.(
+          const errorObject =
             error instanceof Error
-              ? { err: error, name: error.name, message: error.message }
+              ? { err: error.message, name: error.name }
               : {
-                  err: new Error("Network error"),
+                  err: "Network error",
                   name: "NetworkError",
-                  message: "Network error occurred",
-                }
-          );
+                };
+          cb(errorObject);
+          return errorObject;
         }
       },
 
@@ -144,18 +143,29 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @param {function} onError - A callback function to be called if the operation fails.
        * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
        */
-      set: async (target, onSuccess, onError) => {
+      set: async (target, cb: any) => {
+        cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
         try {
           const targetString = JSON.stringify(target);
           const hash = crypto
             .createHash("sha256")
             .update(targetString)
             .digest("hex");
-          await get(hash).put(target, onSuccess, onError);
+          const result = await get(hash).put(target);
+          if (result.err) {
+            cb({ err: result });
+            return { err: result };
+          } else {
+            cb({ err: undefined });
+            return { err: undefined };
+          }
         } catch (error) {
-          onError?.(
-            error instanceof Error ? error : new Error("Network error")
-          );
+          const errorObject = {
+            err: error instanceof Error ? error.message : "Network error",
+          };
+          cb(errorObject);
+          return errorObject;
         }
       },
 
@@ -169,8 +179,11 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @returns {Promise<any>} Returns a Promise that resolves with the data fetched from the server.
        * @throws {Error} Will throw an error if the request fails or if the response cannot be parsed.
        */
-      load: () => {
+      load: (cb: any) => {
+        cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
         if (!fullPath) {
+          cb(undefined);
           return Promise.resolve(undefined);
         }
 
@@ -178,26 +191,28 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
           fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
             .then((response) => {
               if (!response.ok) {
+                cb(undefined);
                 resolve(undefined);
-                //                reject(new Error("Failed to fetch data"));
-                // Resolve with an empty array instead of rejecting with an error
               } else {
                 response
                   .json()
                   .then((data) => {
                     // Transform the array of objects into an array of `data` property values
                     const transformedData = data.map((item: any) => item.data);
+                    cb(undefined, transformedData);
                     resolve(transformedData);
                   })
-                  .catch(() => {
+                  .catch((error) => {
+                    cb(error);
                     reject(new Error("Failed to parse response"));
                   });
               }
             })
             .catch((error) => {
-              reject(
-                error instanceof Error ? error : new Error("Network error")
-              );
+              const errorObject =
+                error instanceof Error ? error : new Error("Network error");
+              cb(errorObject);
+              reject(errorObject);
             });
         });
       },
@@ -216,34 +231,56 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * If the array is not empty, the callback is called with the first item in the array. If the array is empty, the callback is called with undefined.
        * If the load request fails, the error is logged to the console.
        *
-       * @param {function} callback - A callback function to be called once with the first item in the loaded data.
+       * @param {function} cb - A callback function to be called once with the first item in the loaded data.
        */
-      once: async (callback) => {
+      once: async (cb: any) => {
+        cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
         try {
           if (fullPath === "") {
-            callback(undefined);
-            return;
+            cb(undefined);
+            return { err: undefined };
           }
 
           if (path === "alias" || path.endsWith("/alias")) {
             const session = sessionStorage.getItem("userSession");
             if (session) {
               const sessionObj = JSON.parse(session);
-              callback(sessionObj.alias);
-            } else callback(undefined);
-            return;
+              cb(sessionObj.alias);
+              return { err: undefined, data: sessionObj.alias };
+            } else {
+              cb(undefined);
+              return { err: undefined };
+            }
           }
 
           if (fullPath && fullPath.startsWith("~@")) {
             const alias = fullPath.substring(2);
             const exists = await user.exists(alias);
-            callback(exists ? {} : undefined);
+            cb(exists ? {} : undefined);
+            return { err: undefined, data: exists ? {} : undefined };
           } else {
             const array = await node.load();
-            callback(array?.length > 0 ? array[0] : undefined);
+            if (array) {
+              cb(array.length > 0 ? array[0] : undefined);
+              return {
+                err: undefined,
+                data: array.length > 0 ? array[0] : undefined,
+              };
+            } else {
+              cb(undefined);
+              return {
+                err: undefined,
+                data: undefined,
+              };
+            }
           }
         } catch (error) {
-          console.error(error);
+          const errorObject = {
+            err: error instanceof Error ? error.message : "Network error",
+          };
+          cb(errorObject);
+          return errorObject;
         }
       },
     };
