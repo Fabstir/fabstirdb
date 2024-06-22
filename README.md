@@ -264,6 +264,10 @@ user.create("username1", "mypassword1")
 
 ```
 
+## Path
+
+As with GUN API, single path string is different to a chained path. Take for example `gun.get("player").get("inventory/weapons").put("sword");` is not the same as `gun.get("player").get("inventory").get("weapons").put("sword");`
+
 ## Footnote
 
 The interface to FabstirDB is based on GUN API. To use GUN itself, please go to [GUN API Documentation](https://gun.eco/docs/API)

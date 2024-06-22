@@ -8,7 +8,7 @@ config();
 /**
  * Interface for a Node object in OrbitDB.
  *
- * A Node object represents a node in the OrbitDB database. It provides methods for getting, putting, setting, loading data, and performing a one-time operation.
+ * A Node object represents a node in the OrbitDB database. It provides methods for getting, putting, setting, loading data, performing a one-time operation, and mapping over data.
  *
  * @interface
  * @property {Function} get - Retrieves a Node object from the database using the provided key.
@@ -16,6 +16,7 @@ config();
  * @property {Function} set - Asynchronously adds a unique item to an unordered list. If provided, calls onSuccess with the result or onError with any errors.
  * @property {Function} load - Asynchronously fetches data from the server and returns a Promise that resolves with the data.
  * @property {Function} once - Loads data from the node and calls the provided callback function once with the first item in the loaded data.
+ * @property {Function} map - Transforms the data by applying a function to each item and returns an object with a `once` method. The `once` method accepts a callback function and executes it with the transformed data and a key.
  */
 type Node = {
   get: (key: string) => Node;
@@ -34,6 +35,9 @@ type Node = {
   once: (
     callback?: (error: any, data?: any) => void
   ) => Promise<{ err: any; data?: any }>;
+  map: (callback?: (error: any, data?: any[]) => void) => {
+    once: (callback: (data: any, key: any) => void) => void;
+  };
 };
 
 /**
@@ -50,6 +54,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
 
   const get = (path: string): Node => {
     // Ensure the path is prefixed with the basePath only if it's not already included
+    // Ensure the path is prefixed with the basePath only if it's not already included
     const fullPath = path.startsWith(basePath) ? path : `${basePath}/${path}`;
 
     type AckError = Error & {
@@ -63,7 +68,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @param {string} key - The key from which data should be retrieved.
        * @returns {Promise<any>} Returns a Promise that resolves with the data retrieved from the specified key.
        */
-      get: (key: string) => get(`${fullPath}/${key}`),
+      get: (key: string) => get(`${fullPath}/${encodeURIComponent(key)}`),
 
       /**
        * Asynchronously sends a POST request to the server with the provided data.
@@ -218,6 +223,69 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
       },
 
       /**
+       * Executes a callback function with data fetched from a specified path.
+       *
+       * This function fetches data from a URL constructed with `baseUrl` and `fullPath`.
+       * If `fullPath` is not provided, the callback is invoked with `undefined` immediately.
+       * Otherwise, it makes an HTTP GET request to the URL, and upon success, it parses the response as JSON and invokes the callback with the parsed data.
+       * In case of any error (network error, response not OK, or JSON parsing error), the callback is invoked with an error.
+       *
+       * @param {Function} cb - Callback function with signature `(error, data) => void`.
+       * @returns {Object} An object with a `once` method that takes a callback to be executed once with the fetched data.
+       */
+      map: (cb: any) => {
+        cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
+
+        let promise;
+        if (!fullPath) {
+          cb(undefined);
+          promise = Promise.resolve(undefined);
+        } else {
+          promise = new Promise((resolve, reject) => {
+            fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
+              .then((response) => {
+                if (!response.ok) {
+                  cb(undefined);
+                  resolve(undefined);
+                } else {
+                  response
+                    .json()
+                    .then((data) => {
+                      // Transform the array of objects into an array of `data` property values
+                      cb(undefined, data);
+                      resolve(data);
+                    })
+                    .catch((error) => {
+                      cb(error);
+                      reject(new Error("Failed to parse response"));
+                    });
+                }
+              })
+              .catch((error) => {
+                const errorObject =
+                  error instanceof Error ? error : new Error("Network error");
+                cb(errorObject);
+                reject(errorObject);
+              });
+          });
+        }
+
+        return {
+          once: (onceCb: (data: any, key: string | undefined) => void) => {
+            promise.then((dataArray: unknown) => {
+              if (Array.isArray(dataArray) && dataArray.length) {
+                dataArray.forEach((item) => {
+                  onceCb(item.data, item._id);
+                });
+              } else {
+                onceCb(undefined, undefined);
+              }
+            });
+          },
+        };
+      },
+
+      /**
        * Returns the full path.
        *
        * @returns {string} The full path.
@@ -255,7 +323,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
           }
 
           if (fullPath && fullPath.startsWith("~@")) {
-            const alias = fullPath.substring(2);
+            const alias = fullPath.substring(4);
             const exists = await user.exists(alias);
             cb(exists ? {} : undefined);
             return { err: undefined, data: exists ? {} : undefined };
