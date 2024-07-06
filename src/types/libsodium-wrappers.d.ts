@@ -74,4 +74,6 @@ declare module "libsodium-wrappers" {
     URLSAFE: number;
     URLSAFE_NO_PADDING: number;
   };
+
+  export function crypto_scalarmult(n: Uint8Array, p: Uint8Array): Uint8Array;
 }

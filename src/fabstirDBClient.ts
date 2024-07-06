@@ -3,6 +3,7 @@ import user from "./user";
 import { config } from "dotenv";
 import { dbUrl } from "./GlobalOrbit";
 import { eventEmitter } from "./eventEmitter";
+import { libsodium } from "./utils/libsodium";
 config();
 
 /**
@@ -355,6 +356,18 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
     return node;
   };
 
+  const secret = async (
+    theirPublicKey: string,
+    myKeyPair: {
+      pub: string;
+      priv: string;
+      epub: string;
+      epriv: string;
+    }
+  ): Promise<string> => {
+    return await libsodium.secret(theirPublicKey, myKeyPair);
+  };
+
   return {
     get,
     user: (userPub?: string) =>
@@ -362,6 +375,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
     on: (event: string, listener: (data: any) => void) => {
       eventEmitter.on(event, listener);
     },
+    secret,
   };
 }
 

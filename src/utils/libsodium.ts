@@ -12,15 +12,24 @@ import {
   crypto_secretbox_KEYBYTES,
   crypto_secretbox_open_easy,
   crypto_box_seed_keypair,
+  crypto_scalarmult,
   to_base64,
   from_base64,
   randombytes_buf,
   crypto_sign_seed_keypair,
   crypto_generichash,
+  base64_variants,
 } from "libsodium-wrappers";
 import bcrypt from "bcryptjs";
 
 const sodium_base64_VARIANT_URLSAFE_NO_PADDING = 7;
+
+interface KeyPair {
+  pub: string;
+  priv: string;
+  epub: string;
+  epriv: string;
+}
 
 async function generateSeedFromPassword(username: string, password: string) {
   await ready;
@@ -55,10 +64,22 @@ export const libsodium = {
     const encryptKeys = crypto_box_seed_keypair(seed);
 
     return {
-      pub: to_hex(signKeys.publicKey),
-      priv: to_hex(signKeys.privateKey),
-      epub: to_hex(encryptKeys.publicKey),
-      epriv: to_hex(encryptKeys.privateKey),
+      pub: to_base64(
+        signKeys.publicKey,
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
+      ),
+      priv: to_base64(
+        signKeys.privateKey,
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
+      ),
+      epub: to_base64(
+        encryptKeys.publicKey,
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
+      ),
+      epriv: to_base64(
+        encryptKeys.privateKey,
+        sodium_base64_VARIANT_URLSAFE_NO_PADDING
+      ),
     };
   },
 
@@ -130,5 +151,30 @@ export const libsodium = {
 
   async verifyPassword(password: string, hash: string) {
     return bcrypt.compare(password, hash);
+  },
+
+  async secret(theirPublicKey: string, myKeyPair: KeyPair): Promise<string> {
+    await this.ensureReady(); // Ensure libsodium is ready
+
+    // Function to safely decode Base64Url
+    const safeFromBase64 = (str: string) => {
+      try {
+        return from_base64(str, base64_variants.URLSAFE_NO_PADDING);
+      } catch (e) {
+        // If decoding fails, try adding padding
+        const padded = str + "=".repeat((4 - (str.length % 4)) % 4);
+        return from_base64(padded, base64_variants.URLSAFE_NO_PADDING);
+      }
+    };
+
+    // Decode the public key and private key
+    const theirPubKey = safeFromBase64(theirPublicKey);
+    const myPrivKey = safeFromBase64(myKeyPair.epriv);
+
+    // Compute the shared secret
+    const sharedSecret = crypto_scalarmult(myPrivKey, theirPubKey);
+
+    // Encode the shared secret to Base64Url
+    return to_base64(sharedSecret, base64_variants.URLSAFE_NO_PADDING);
   },
 };
