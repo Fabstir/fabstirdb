@@ -158,7 +158,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
             .createHash("sha256")
             .update(targetString)
             .digest("hex");
-          const result = await get(hash).put(target);
+          const result = await get(fullPath).get(hash).put(target); // Navigate the full path and store the data
           if (result.err) {
             cb({ err: result });
             return { err: result };
