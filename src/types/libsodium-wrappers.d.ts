@@ -76,4 +76,17 @@ declare module "libsodium-wrappers" {
   };
 
   export function crypto_scalarmult(n: Uint8Array, p: Uint8Array): Uint8Array;
+
+  export function crypto_sign_ed25519_pk_to_curve25519(
+    publicKey: Uint8Array
+  ): Uint8Array;
+
+  export function crypto_sign_ed25519_sk_to_curve25519(
+    privateKey: Uint8Array
+  ): Uint8Array;
+
+  export const crypto_pwhash_ALG_ARGON2ID13: number;
+  export const crypto_pwhash_OPSLIMIT_INTERACTIVE: number;
+  export const crypto_pwhash_MEMLIMIT_INTERACTIVE: number;
+  export const crypto_pwhash_SALTBYTES: number;
 }

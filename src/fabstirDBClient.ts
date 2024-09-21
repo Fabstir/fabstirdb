@@ -1,9 +1,8 @@
 import crypto from "crypto";
 import user from "./user";
 import { config } from "dotenv";
-import { dbUrl } from "./GlobalOrbit";
 import { eventEmitter } from "./eventEmitter";
-import { libsodium } from "./utils/libsodium";
+import { FEA } from "./utils/libsodium";
 config();
 
 /**
@@ -365,7 +364,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
       epriv: string;
     }
   ): Promise<string> => {
-    return await libsodium.secret(theirPublicKey, myKeyPair);
+    return await FEA.secret(theirPublicKey, myKeyPair);
   };
 
   return {

@@ -28,7 +28,7 @@ This module exposes a global OrbitDB instance that implements the `user` graph a
 ## Example
 
 This code block demonstrates user creation, authentication, granting write access, and data manipulation in a database using dbClient.
-Only the logged in user can write to their user graph unless that user grants access to other users; in this example `addWriteAcess` is used to specify that another user can have write permission to a subgraph area "test".
+Only the logged in user can write to their user graph unless that user grants access to other users; in this example `addWriteAccess` is used to specify that another user can have write permission to a subgraph area "test".
 
 ```
 user.create("username1", "mypassword1")
@@ -38,7 +38,7 @@ user.leave();
 user.create("username2", "mypassword2")
 const userPub2 = user.is.pub
 
-await user.addWriteAcess(`users/${userPub1}/test`, userPub1);
+await user.addWriteAccess(`users/${userPub1}/test`, userPub1);
 user.leave();
 
 user.auth("username1", "mypassword1")
@@ -126,6 +126,8 @@ console.log(dataAgain.message); // "hello world"
   - **Returns**: A Promise that resolves to true if the user exists, otherwise false.
 
 - `addWriteAccess` _(Function)_: Asynchronously adds write access to a specified path for a user with a given public key or '\*' to grant write access to all users.
+
+- `removeWriteAccess` _(Function)_: Asynchronously removes write access to a specified path for a user with a given public key or '\*' to remove write access to all users.
 
   - **Parameters**:
 

@@ -5,5 +5,7 @@
  * @returns {Object} An instance of DBClient.
  */
 import createDBClient from "./GlobalOrbit";
+import { FEA } from "./utils/libsodium";
 
 export default createDBClient;
+export { FEA };

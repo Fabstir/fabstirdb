@@ -1,6 +1,6 @@
 import { updateDbClient, dbClient, resetDbClient } from "./GlobalOrbit";
 import { eventEmitter } from "./eventEmitter";
-import { libsodium } from "./utils/libsodium";
+import { FEA } from "./utils/libsodium";
 import { to_base64, base64_variants } from "libsodium-wrappers";
 
 type UserKeys = {
@@ -29,7 +29,8 @@ type User = {
     sea: UserKeys | null;
   };
   exists: (alias: string) => Promise<boolean>;
-  addWriteAcess: (path: string, publicKey: string) => Promise<void>;
+  addWriteAccess: (path: string, publicKey: string) => Promise<void>;
+  removeWriteAccess: (path: string, publicKey: string) => Promise<void>;
   is: {
     pub: string;
     priv: string;
@@ -53,7 +54,8 @@ type User = {
  * @property {Function} recall - Retrieves the user's session data from the session storage.
  * @property {Function} pair - Retrieves the user's key pair from the current session.
  * @property {Function} exists - Checks if a user exists based on ACL entries.
- * @property {Function} addWriteAcess - Asynchronously adds write access to a specified path for a user with a given public key.
+ * @property {Function} addWriteAccess - Asynchronously adds write access to a specified path for a user with a given public key.
+ * @property {Function} removeWriteAccess - Asynchronously removes write access from a specified path for a user with a given public key.
  * @property {Object} is - An object with a getter for the public key of the current user session.
  */
 const user: User = {
@@ -76,9 +78,9 @@ const user: User = {
     cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
     try {
-      await libsodium.ensureReady();
-      const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
-      const hashedPassword = await libsodium.hashPassword(pass);
+      await FEA.ensureReady();
+      const keys = await FEA.generateKeyPairsFromPassword(alias, pass);
+      const hashedPassword = await FEA.hashPassword(pass);
 
       const tempTokenResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/request-token`,
@@ -161,8 +163,8 @@ const user: User = {
     cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
     try {
-      await libsodium.ensureReady();
-      const keys = await libsodium.generateKeyPairsFromPassword(alias, pass);
+      await FEA.ensureReady();
+      const keys = await FEA.generateKeyPairsFromPassword(alias, pass);
 
       const tempTokenResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/request-token`,
@@ -370,7 +372,7 @@ const user: User = {
    * @throws Will throw an error if the HTTP request status is not OK.
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
-  addWriteAcess: async (path: string, publicKey: string) => {
+  addWriteAccess: async (path: string, publicKey: string) => {
     const session = sessionStorage.getItem("userSession");
     const sessionData = session ? JSON.parse(session) : null;
     const token = sessionData ? sessionData.token : null;
@@ -378,6 +380,44 @@ const user: User = {
     try {
       const registerResponse = await fetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/add-write-access`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            path,
+            publicKey,
+          }),
+        }
+      );
+
+      if (!registerResponse.ok) {
+        throw new Error(`HTTP error! status: ${registerResponse.status}`);
+      }
+    } catch (error) {
+      console.error("An error occurred:", error);
+    }
+  },
+
+  /**
+   * Asynchronously removes write access from a specified path for a user with a given public key.
+   *
+   * @async
+   * @param {string} path - The path to which write access should be added.
+   * @param {string} publicKey - The public key of the user to whom write access should be removed.
+   * @throws Will throw an error if the HTTP request status is not OK.
+   * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
+   */
+  removeWriteAccess: async (path: string, publicKey: string) => {
+    const session = sessionStorage.getItem("userSession");
+    const sessionData = session ? JSON.parse(session) : null;
+    const token = sessionData ? sessionData.token : null;
+
+    try {
+      const registerResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/remove-write-access`,
         {
           method: "POST",
           headers: {
