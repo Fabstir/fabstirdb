@@ -1,4 +1,3 @@
-// src/types/libsodium-wrappers.d.ts
 declare module "libsodium-wrappers" {
   export function ready(): Promise<void>;
 
@@ -28,6 +27,18 @@ declare module "libsodium-wrappers" {
     signedMessage: Uint8Array,
     publicKey: Uint8Array
   ): Uint8Array | null;
+
+  // Add missing functions for detached signing
+  export function crypto_sign_detached(
+    message: Uint8Array,
+    privateKey: Uint8Array
+  ): Uint8Array;
+
+  export function crypto_sign_verify_detached(
+    signature: Uint8Array,
+    message: Uint8Array,
+    publicKey: Uint8Array
+  ): boolean;
 
   export function crypto_secretbox_easy(
     message: Uint8Array,

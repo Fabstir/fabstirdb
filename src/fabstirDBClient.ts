@@ -3,6 +3,7 @@ import user from "./user";
 import { config } from "dotenv";
 import { eventEmitter } from "./eventEmitter";
 import { FEA } from "./utils/libsodium";
+import { encodeUriPathSegments } from "./utils/pathUtils";
 config();
 
 /**
@@ -48,14 +49,22 @@ type Node = {
  */
 function fabstirDBClient(baseUrl: string, userPub?: string) {
   // Adjust basePath based on whether a userPub is provided
-  //baseUrl = "http://localhost:3001";
-
   const basePath = userPub ? `users/${userPub}` : "";
+
+  let isEncoded = false;
 
   const get = (path: string): Node => {
     // Ensure the path is prefixed with the basePath only if it's not already included
-    // Ensure the path is prefixed with the basePath only if it's not already included
-    const fullPath = path.startsWith(basePath) ? path : `${basePath}/${path}`;
+    const formattedPath = path.endsWith("/") ? path : path ? `${path}/` : "";
+    const fullPath = path.startsWith(basePath)
+      ? formattedPath
+      : `${basePath}/${formattedPath}`;
+
+    // Encode the path only if it is not already encoded
+    const encodedFullPath = isEncoded
+      ? fullPath
+      : encodeUriPathSegments(fullPath);
+    isEncoded = true; // Set isEncoded to true after encoding the path
 
     type AckError = Error & {
       err?: Error;
@@ -68,7 +77,10 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @param {string} key - The key from which data should be retrieved.
        * @returns {Promise<any>} Returns a Promise that resolves with the data retrieved from the specified key.
        */
-      get: (key: string) => get(`${fullPath}/${encodeURIComponent(key)}`),
+      get: (key: string) => {
+        const formattedKey = key.endsWith("/") ? key : `${key}/`;
+        return get(`${encodedFullPath}${encodeUriPathSegments(formattedKey)}`);
+      },
 
       /**
        * Asynchronously sends a POST request to the server with the provided data.
@@ -97,21 +109,21 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
               },
-              body: JSON.stringify({ value: data }),
+              body: JSON.stringify({ path: encodedFullPath, value: data }), // Send fullPath and data in the request body
             }
           : {
               method: "DELETE",
               headers: {
-                "Content-Type": "", // Set to an empty string
+                "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`, // Include the JWT token in the Authorization header
               },
+              body: JSON.stringify({ path: encodedFullPath }), // Send fullPath in the request body for DELETE
             };
 
         try {
-          const response = await fetch(
-            `${baseUrl}/${encodeURIComponent(fullPath)}`,
-            options
-          );
+          const url = `${baseUrl}/update-data`; // Use a fixed endpoint for both POST and DELETE
+
+          const response = await fetch(url, options); // Use a fixed endpoint
           if (!response.ok) {
             const result = await response.text();
             const errorObject = { err: result, name: "NetworkError" };
@@ -157,7 +169,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
             .createHash("sha256")
             .update(targetString)
             .digest("hex");
-          const result = await get(fullPath).get(hash).put(target); // Navigate the full path and store the data
+          const result = await get(encodedFullPath).get(hash).put(target); // Navigate the full path and store the data
           if (result.err) {
             cb({ err: result });
             return { err: result };
@@ -177,7 +189,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
       /**
        * Asynchronously fetches data from the server.
        *
-       * This function sends a GET request to the server and returns a Promise that resolves with the response data.
+       * This function sends a POST request to the server and returns a Promise that resolves with the response data.
        * If the request fails, the Promise is rejected with an error.
        *
        * @async
@@ -187,13 +199,19 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
       load: (cb: any) => {
         cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
-        if (!fullPath) {
+        if (!encodedFullPath) {
           cb(undefined);
           return Promise.resolve(undefined);
         }
 
         return new Promise((resolve, reject) => {
-          fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
+          fetch(`${baseUrl}/fetch-data`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ path: encodedFullPath }),
+          })
             .then((response) => {
               if (!response.ok) {
                 cb(undefined);
@@ -202,9 +220,32 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                 response
                   .json()
                   .then((data) => {
-                    // Transform the array of objects into an array of `data` property values
-                    const transformedData = data.map((item: any) => item.data);
-                    cb(undefined, transformedData);
+                    // Transform the data into the desired structure
+                    const transformedData = data.reduce(
+                      (acc: any, item: any) => {
+                        const pathParts = item._id
+                          .split("/")
+                          .filter((part: string) => part !== "");
+                        const key = pathParts[pathParts.length - 1];
+
+                        // Preserve the data as is, without parsing
+                        acc[key] = item.data;
+
+                        return acc;
+                      },
+                      {}
+                    );
+
+                    if (
+                      !transformedData ||
+                      Object.keys(transformedData).length === 0
+                    ) {
+                      cb(undefined, undefined);
+                      resolve(undefined);
+                    } else {
+                      cb(undefined, transformedData);
+                      resolve(transformedData);
+                    }
                     resolve(transformedData);
                   })
                   .catch((error) => {
@@ -227,7 +268,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        *
        * This function fetches data from a URL constructed with `baseUrl` and `fullPath`.
        * If `fullPath` is not provided, the callback is invoked with `undefined` immediately.
-       * Otherwise, it makes an HTTP GET request to the URL, and upon success, it parses the response as JSON and invokes the callback with the parsed data.
+       * Otherwise, it makes an HTTP POST request to the URL, and upon success, it parses the response as JSON and invokes the callback with the parsed data.
        * In case of any error (network error, response not OK, or JSON parsing error), the callback is invoked with an error.
        *
        * @param {Function} cb - Callback function with signature `(error, data) => void`.
@@ -237,12 +278,18 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
         cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
         let promise;
-        if (!fullPath) {
+        if (!encodedFullPath) {
           cb(undefined);
           promise = Promise.resolve(undefined);
         } else {
           promise = new Promise((resolve, reject) => {
-            fetch(`${baseUrl}/${encodeURIComponent(fullPath)}`)
+            fetch(`${baseUrl}/fetch-data`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ path: encodedFullPath }), // Send fullPath in the request body
+            })
               .then((response) => {
                 if (!response.ok) {
                   cb(undefined);
@@ -290,7 +337,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        *
        * @returns {string} The full path.
        */
-      path: () => fullPath,
+      path: () => encodedFullPath,
 
       /**
        * Asynchronously loads data from the node and calls the provided callback function once with the first item in the loaded data.
@@ -305,7 +352,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
         cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
         try {
-          if (fullPath === "") {
+          if (encodedFullPath === "") {
             cb(undefined);
             return { err: undefined };
           }
@@ -322,19 +369,44 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
             }
           }
 
-          if (fullPath && fullPath.startsWith("~@")) {
-            const alias = fullPath.substring(4);
+          if (encodedFullPath && encodedFullPath.startsWith("~%40")) {
+            let alias = decodeURIComponent(encodedFullPath.substring(4));
+            alias = alias.endsWith("/") ? alias.slice(0, -1) : alias;
             const exists = await user.exists(alias);
             cb(exists ? {} : undefined);
             return { err: undefined, data: exists ? {} : undefined };
           } else {
-            const array = await node.load();
-            if (array) {
-              cb(array.length > 0 ? array[0] : undefined);
-              return {
-                err: undefined,
-                data: array.length > 0 ? array[0] : undefined,
-              };
+            const result = await node.load();
+            if (
+              result &&
+              typeof result === "object" &&
+              !Array.isArray(result)
+            ) {
+              if (Object.keys(result).length === 0) {
+                cb(undefined);
+                return {
+                  err: undefined,
+                  data: undefined,
+                };
+              } else {
+                const segments = path.split("/");
+                const lastSegment =
+                  segments[segments.length - 1] ||
+                  segments[segments.length - 2];
+                if (result[lastSegment]) {
+                  cb(result[lastSegment]);
+                  return {
+                    err: undefined,
+                    data: result[lastSegment],
+                  };
+                } else {
+                  cb(result);
+                  return {
+                    err: undefined,
+                    data: result,
+                  };
+                }
+              }
             } else {
               cb(undefined);
               return {
@@ -368,9 +440,14 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
   };
 
   return {
-    get,
-    user: (userPub?: string) =>
-      userPub ? fabstirDBClient(baseUrl, userPub) : user,
+    get: (path: string) => {
+      isEncoded = false; // Reset isEncoded to false at the entry point
+      return get(path);
+    },
+    user: (userPub?: string) => {
+      isEncoded = false; // Reset isEncoded to false at the entry point
+      return userPub ? fabstirDBClient(baseUrl, userPub) : user;
+    },
     on: (event: string, listener: (data: any) => void) => {
       eventEmitter.on(event, listener);
     },

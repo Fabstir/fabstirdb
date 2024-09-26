@@ -1,7 +1,14 @@
 import { updateDbClient, dbClient, resetDbClient } from "./GlobalOrbit";
 import { eventEmitter } from "./eventEmitter";
 import { FEA } from "./utils/libsodium";
-import { to_base64, base64_variants } from "libsodium-wrappers";
+import {
+  to_base64,
+  from_base64,
+  from_string,
+  crypto_sign_detached,
+  base64_variants,
+} from "libsodium-wrappers";
+import { encodeUriPathSegments } from "./utils/pathUtils";
 
 type UserKeys = {
   priv: string;
@@ -107,7 +114,7 @@ const user: User = {
             Authorization: `Bearer ${tempTokenData.token}`,
           },
           body: JSON.stringify({
-            alias,
+            alias: `~%40${encodeURIComponent(alias)}/`,
             publicKey: keys.pub,
             hashedPassword,
           }),
@@ -190,7 +197,10 @@ const user: User = {
             "Content-Type": "application/json",
             Authorization: `Bearer ${tempTokenData.token}`,
           },
-          body: JSON.stringify({ alias, pass }),
+          body: JSON.stringify({
+            alias: `~%40${encodeURIComponent(alias)}/`,
+            pass,
+          }),
         }
       );
 
@@ -331,7 +341,7 @@ const user: User = {
   /**
    * Asynchronously checks if a user with the given alias exists.
    *
-   * This function sends a GET request to the /acl/{alias} endpoint of the backend.
+   * This function sends a POST request to the /acl endpoint of the backend with the alias in the request body.
    * If the request is successful and the response data indicates that the user exists, it returns true.
    * Otherwise, it returns false.
    *
@@ -342,16 +352,15 @@ const user: User = {
    */
   exists: async (alias: string) => {
     try {
-      alias = encodeURIComponent(alias);
-
-      // alias is the username to check for existence
+      // Send alias in the request body
       const aclResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/acl/${alias}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/acl`,
         {
-          method: "GET",
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({ alias: `~%40${encodeURIComponent(alias)}/` }), // Send alias in the request body
         }
       );
 
@@ -372,10 +381,40 @@ const user: User = {
    * @throws Will throw an error if the HTTP request status is not OK.
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
-  addWriteAccess: async (path: string, publicKey: string) => {
+  addWriteAccess: async (path, publicKey) => {
+    if (!path) {
+      throw new Error("Path is not defined.");
+    }
+
+    if (!publicKey) {
+      throw new Error("Public key is not defined.");
+    }
+
+    const formattedPath = path.endsWith("/") ? path : `${path}/`;
+    const encodedPath = encodeUriPathSegments(formattedPath);
+
     const session = sessionStorage.getItem("userSession");
     const sessionData = session ? JSON.parse(session) : null;
     const token = sessionData ? sessionData.token : null;
+
+    if (!sessionData || !sessionData.keys || !sessionData.keys.priv) {
+      throw new Error(
+        "Private key not found in session. User may need to log in again."
+      );
+    }
+
+    // Use the `priv` field from sessionData.keys for the private key
+    const privateKey = from_base64(
+      sessionData.keys.priv,
+      base64_variants.URLSAFE_NO_PADDING
+    );
+
+    // Message to sign
+    const msgToSign = `${encodedPath}-${publicKey}-grant`;
+    const msgBytes = from_string(msgToSign);
+
+    // Generate the signature using the user's private key
+    const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
       const registerResponse = await fetch(
@@ -387,8 +426,9 @@ const user: User = {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            path,
+            path: encodedPath,
             publicKey,
+            signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
           }),
         }
       );
@@ -405,15 +445,45 @@ const user: User = {
    * Asynchronously removes write access from a specified path for a user with a given public key.
    *
    * @async
-   * @param {string} path - The path to which write access should be added.
+   * @param {string} path - The path to which write access should be removed.
    * @param {string} publicKey - The public key of the user to whom write access should be removed.
    * @throws Will throw an error if the HTTP request status is not OK.
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
-  removeWriteAccess: async (path: string, publicKey: string) => {
+  removeWriteAccess: async (path, publicKey) => {
+    if (!path) {
+      throw new Error("Path is not defined.");
+    }
+
+    if (!publicKey) {
+      throw new Error("Public key is not defined.");
+    }
+
+    const formattedPath = path.endsWith("/") ? path : `${path}/`;
+    const encodedPath = encodeUriPathSegments(formattedPath);
+
     const session = sessionStorage.getItem("userSession");
     const sessionData = session ? JSON.parse(session) : null;
     const token = sessionData ? sessionData.token : null;
+
+    if (!sessionData || !sessionData.keys || !sessionData.keys.priv) {
+      throw new Error(
+        "Private key not found in session. User may need to log in again."
+      );
+    }
+
+    // Use the `priv` field from sessionData.keys for the private key
+    const privateKey = from_base64(
+      sessionData.keys.priv,
+      base64_variants.URLSAFE_NO_PADDING
+    );
+
+    // Message to sign
+    const msgToSign = `${encodedPath}-${publicKey}-revoke`;
+    const msgBytes = from_string(msgToSign);
+
+    // Generate the signature using the user's private key
+    const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
       const registerResponse = await fetch(
@@ -425,8 +495,9 @@ const user: User = {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            path,
+            path: encodedPath,
             publicKey,
+            signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
           }),
         }
       );
