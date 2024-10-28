@@ -1,4 +1,4 @@
-import { updateDbClient, dbClient, resetDbClient } from "./GlobalOrbit";
+import { updateDbClient, dbClient, resetDbClient, dbUrl } from "./GlobalOrbit";
 import { eventEmitter } from "./eventEmitter";
 import { FEA } from "./utils/libsodium";
 import {
@@ -89,14 +89,11 @@ const user: User = {
       const keys = await FEA.generateKeyPairsFromPassword(alias, pass);
       const hashedPassword = await FEA.hashPassword(pass);
 
-      const tempTokenResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/request-token`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alias }),
-        }
-      );
+      const tempTokenResponse = await fetch(`${dbUrl}/request-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias }),
+      });
 
       const tempTokenData = await tempTokenResponse.json();
       if (!tempTokenResponse.ok) {
@@ -105,21 +102,18 @@ const user: User = {
         );
       }
 
-      const registerResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/register`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${tempTokenData.token}`,
-          },
-          body: JSON.stringify({
-            alias: `~%40${encodeURIComponent(alias)}/`,
-            publicKey: keys.pub,
-            hashedPassword,
-          }),
-        }
-      );
+      const registerResponse = await fetch(`${dbUrl}/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tempTokenData.token}`,
+        },
+        body: JSON.stringify({
+          alias: `~%40${encodeURIComponent(alias)}/`,
+          publicKey: keys.pub,
+          hashedPassword,
+        }),
+      });
 
       const registerData = await registerResponse.json();
       if (!registerResponse.ok) {
@@ -173,14 +167,11 @@ const user: User = {
       await FEA.ensureReady();
       const keys = await FEA.generateKeyPairsFromPassword(alias, pass);
 
-      const tempTokenResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/request-token`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alias }),
-        }
-      );
+      const tempTokenResponse = await fetch(`${dbUrl}/request-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alias }),
+      });
 
       const tempTokenData = await tempTokenResponse.json();
       if (!tempTokenResponse.ok) {
@@ -189,20 +180,17 @@ const user: User = {
         );
       }
 
-      const authResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/authenticate`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${tempTokenData.token}`,
-          },
-          body: JSON.stringify({
-            alias: `~%40${encodeURIComponent(alias)}/`,
-            pass,
-          }),
-        }
-      );
+      const authResponse = await fetch(`${dbUrl}/authenticate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tempTokenData.token}`,
+        },
+        body: JSON.stringify({
+          alias: `~%40${encodeURIComponent(alias)}/`,
+          pass,
+        }),
+      });
 
       if (!authResponse.ok) {
         cb({ err: (await authResponse.text()) || "Authentication failed." });
@@ -353,16 +341,13 @@ const user: User = {
   exists: async (alias: string) => {
     try {
       // Send alias in the request body
-      const aclResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/acl`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ alias: `~%40${encodeURIComponent(alias)}/` }), // Send alias in the request body
-        }
-      );
+      const aclResponse = await fetch(`${dbUrl}/acl`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ alias: `~%40${encodeURIComponent(alias)}/` }), // Send alias in the request body
+      });
 
       const aclData = await aclResponse.json();
       return aclResponse.ok && aclData.exists;
@@ -417,21 +402,18 @@ const user: User = {
     const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
-      const registerResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/add-write-access`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            path: encodedPath,
-            publicKey,
-            signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
-          }),
-        }
-      );
+      const registerResponse = await fetch(`${dbUrl}/add-write-access`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          path: encodedPath,
+          publicKey,
+          signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
+        }),
+      });
 
       if (!registerResponse.ok) {
         throw new Error(`HTTP error! status: ${registerResponse.status}`);
@@ -486,21 +468,18 @@ const user: User = {
     const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
-      const registerResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/remove-write-access`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            path: encodedPath,
-            publicKey,
-            signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
-          }),
-        }
-      );
+      const registerResponse = await fetch(`${dbUrl}/remove-write-access`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          path: encodedPath,
+          publicKey,
+          signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
+        }),
+      });
 
       if (!registerResponse.ok) {
         throw new Error(`HTTP error! status: ${registerResponse.status}`);
