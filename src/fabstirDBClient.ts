@@ -1,9 +1,10 @@
+import { dbUrl } from "./GlobalOrbit";
 import crypto from "crypto";
 import user from "./user";
 import { config } from "dotenv";
 import { eventEmitter } from "./eventEmitter";
 import { FEA } from "./utils/libsodium";
-import { encodeUriPathSegments } from "./utils/pathUtils";
+import { encodeUriPathSegments, refreshToken } from "./utils/pathUtils";
 config();
 
 /**
@@ -95,12 +96,12 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
        * @param {function} onError - A callback function to be called if the request fails.
        * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
        */
-      put: async (data: any, cb: any) => {
+      put: async (data, cb) => {
         cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
         const session = sessionStorage.getItem("userSession");
         const sessionData = session ? JSON.parse(session) : null;
-        const token = sessionData ? sessionData.token : null;
+        let token = sessionData ? sessionData.accessToken : null;
 
         const options = data
           ? {
@@ -123,7 +124,19 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
         try {
           const url = `${baseUrl}/update-data`; // Use a fixed endpoint for both POST and DELETE
 
-          const response = await fetch(url, options); // Use a fixed endpoint
+          let response = await fetch(url, options); // Use a fixed endpoint
+
+          if (response.status === 401) {
+            // Access token expired, try to refresh it
+            try {
+              token = await refreshToken(dbUrl);
+              options.headers.Authorization = `Bearer ${token}`;
+              response = await fetch(url, options);
+            } catch (error) {
+              throw new Error("Failed to refresh token");
+            }
+          }
+
           if (!response.ok) {
             const result = await response.text();
             const errorObject = { err: result, name: "NetworkError" };

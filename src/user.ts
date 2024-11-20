@@ -8,7 +8,7 @@ import {
   crypto_sign_detached,
   base64_variants,
 } from "libsodium-wrappers";
-import { encodeUriPathSegments } from "./utils/pathUtils";
+import { encodeUriPathSegments, refreshToken } from "./utils/pathUtils";
 
 type UserKeys = {
   priv: string;
@@ -21,8 +21,6 @@ type UserSession = {
   alias: string;
   keys: UserKeys;
 };
-
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
 
 type User = {
   create: (alias: string, pass: string, cb: any) => Promise<void>;
@@ -71,7 +69,7 @@ const user: User = {
    *
    * This function generates a key pair from the alias and password, hashes the password,
    * requests a temporary token from the backend, and then sends a registration request to the backend.
-   * If the registration is successful, it returns the user's token and keys via the callback function and updates the OrbitDB client.
+   * If the registration is successful, it returns the user's accessToken, refreshToken, and keys via the callback function and updates the OrbitDB client.
    * It does not log the user in or store the user's session data in the session storage.
    *
    * @async
@@ -81,7 +79,7 @@ const user: User = {
    * @throws Will throw an error if the registration fails.
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
-  create: async (alias: string, pass: string, cb: any) => {
+  create: async (alias, pass, cb) => {
     cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
     try {
@@ -124,17 +122,19 @@ const user: User = {
       cb(
         { err: undefined },
         {
-          token: registerData.token,
+          accessToken: registerData.accessToken,
+          refreshToken: registerData.refreshToken,
           keys,
         }
       );
-      // Emit an event upon successful authentication
+      // Emit an event upon successful registration
       eventEmitter.emit("create", {
         success: true,
         message: registerData.message,
         alias,
         keys,
-        token: registerData.token,
+        accessToken: registerData.accessToken,
+        refreshToken: registerData.refreshToken,
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -160,7 +160,7 @@ const user: User = {
    * @throws Will throw an error if the authentication fails.
    * @returns {Promise<void>} Returns a Promise that resolves when the operation is complete.
    */
-  auth: async (alias: string, pass: string, cb: any) => {
+  auth: async (alias, pass, cb) => {
     cb = cb || (() => {}); // If cb is not provided, set it to a no-op function
 
     try {
@@ -202,7 +202,8 @@ const user: User = {
         "userSession",
         JSON.stringify({
           alias,
-          token: authData.token,
+          accessToken: authData.accessToken,
+          refreshToken: authData.refreshToken,
           keys,
         })
       );
@@ -211,7 +212,7 @@ const user: User = {
       cb(
         { err: undefined },
         {
-          token: authData.token,
+          token: authData.accessToken,
           keys,
         }
       );
@@ -222,7 +223,7 @@ const user: User = {
         message: authData.message,
         alias,
         keys,
-        token: authData.token,
+        token: authData.accessToken,
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -380,7 +381,7 @@ const user: User = {
 
     const session = sessionStorage.getItem("userSession");
     const sessionData = session ? JSON.parse(session) : null;
-    const token = sessionData ? sessionData.token : null;
+    let token = sessionData ? sessionData.accessToken : null;
 
     if (!sessionData || !sessionData.keys || !sessionData.keys.priv) {
       throw new Error(
@@ -402,7 +403,7 @@ const user: User = {
     const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
-      const registerResponse = await fetch(`${dbUrl}/add-write-access`, {
+      let registerResponse = await fetch(`${dbUrl}/add-write-access`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -414,6 +415,30 @@ const user: User = {
           signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
         }),
       });
+
+      if (registerResponse.status === 401) {
+        // Access token expired, try to refresh it
+        try {
+          token = await refreshToken(dbUrl);
+          registerResponse = await fetch(`${dbUrl}/add-write-access`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              path: encodedPath,
+              publicKey,
+              signature: to_base64(
+                signature,
+                base64_variants.URLSAFE_NO_PADDING
+              ), // Send signature as base64
+            }),
+          });
+        } catch (error) {
+          throw new Error("Failed to refresh token");
+        }
+      }
 
       if (!registerResponse.ok) {
         throw new Error(`HTTP error! status: ${registerResponse.status}`);
@@ -446,7 +471,7 @@ const user: User = {
 
     const session = sessionStorage.getItem("userSession");
     const sessionData = session ? JSON.parse(session) : null;
-    const token = sessionData ? sessionData.token : null;
+    let token = sessionData ? sessionData.accessToken : null;
 
     if (!sessionData || !sessionData.keys || !sessionData.keys.priv) {
       throw new Error(
@@ -468,7 +493,7 @@ const user: User = {
     const signature = crypto_sign_detached(msgBytes, privateKey);
 
     try {
-      const registerResponse = await fetch(`${dbUrl}/remove-write-access`, {
+      let registerResponse = await fetch(`${dbUrl}/remove-write-access`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -480,6 +505,30 @@ const user: User = {
           signature: to_base64(signature, base64_variants.URLSAFE_NO_PADDING), // Send signature as base64
         }),
       });
+
+      if (registerResponse.status === 401) {
+        // Access token expired, try to refresh it
+        try {
+          token = await refreshToken(dbUrl);
+          registerResponse = await fetch(`${dbUrl}/remove-write-access`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              path: encodedPath,
+              publicKey,
+              signature: to_base64(
+                signature,
+                base64_variants.URLSAFE_NO_PADDING
+              ), // Send signature as base64
+            }),
+          });
+        } catch (error) {
+          throw new Error("Failed to refresh token");
+        }
+      }
 
       if (!registerResponse.ok) {
         throw new Error(`HTTP error! status: ${registerResponse.status}`);
