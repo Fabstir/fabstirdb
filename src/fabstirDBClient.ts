@@ -242,7 +242,7 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                         const key = pathParts[pathParts.length - 1];
 
                         // Preserve the data as is, without parsing
-                        acc[key] = item.data;
+                        acc[decodeURIComponent(key)] = item.data;
 
                         return acc;
                       },
@@ -406,19 +406,12 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
                 const lastSegment =
                   segments[segments.length - 1] ||
                   segments[segments.length - 2];
-                if (result[lastSegment]) {
-                  cb(result[lastSegment]);
-                  return {
-                    err: undefined,
-                    data: result[lastSegment],
-                  };
-                } else {
-                  cb(result);
-                  return {
-                    err: undefined,
-                    data: result,
-                  };
-                }
+
+                cb(result[decodeURIComponent(lastSegment)]);
+                return {
+                  err: undefined,
+                  data: result[decodeURIComponent(lastSegment)],
+                };
               }
             } else {
               cb(undefined);
