@@ -457,6 +457,9 @@ function fabstirDBClient(baseUrl: string, userPub?: string) {
     on: (event: string, listener: (data: any) => void) => {
       eventEmitter.on(event, listener);
     },
+    off: (event: string, listener: (data: any) => void) => {
+      eventEmitter.off(event, listener);
+    },
     secret,
   };
 }

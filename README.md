@@ -245,26 +245,56 @@ Exposes a global OrbitDB instance that implements `user` graph and `Node` databa
 
 ## Installation and Setup
 
-```
-yarn install
-yarn build
-```
+1. Install dependencies and build the package:
 
-You need a running instance of FabstirDB-Backend and set `FABSTIRDB_BACKEND_URL` environment variable to its url.
-Then in your project...
+   ```
+   yarn install
+   yarn build
+   ```
 
-```
-import { createDBClient } from 'fabstirdb-lib';
+2. Create a `.tgz` file for the package:
 
-const dbClient = createDBClient(
-  process.env.NEXT_PUBLIC_FABSTIRDB_BACKEND_URL,
-);
-const user = dbClient.user();
+   ```
+   yarn pack
+   ```
 
-user.create("username1", "mypassword1")
-...
+   This will generate a `fabstirdb-lib.tgz` file in the current directory, which can be used for local installation or distribution.
 
-```
+3. Add the `.tgz` file as a dependency in your project:
+
+   In your consuming project's `package.json`, add the following entry under `dependencies`:
+
+   ```json
+   {
+     "dependencies": {
+       "fabstirdb-lib": "file:./path/to/fabstirdb-lib.tgz"
+     }
+   }
+   ```
+
+   Replace `./path/to/fabstirdb-lib.tgz` with the relative path to the `.tgz` file.
+
+4. Install the dependency in your project:
+
+   ```
+   yarn install
+   ```
+
+5. Set up the `FABSTIRDB_BACKEND_URL` environment variable to point to your running instance of FabstirDB-Backend.
+
+6. Import and use the library in your project:
+
+   ```javascript
+   import { createDBClient } from 'fabstirdb-lib';
+
+   const dbClient = createDBClient(
+     process.env.NEXT_PUBLIC_FABSTIRDB_BACKEND_URL,
+   );
+   const user = dbClient.user();
+
+   user.create("username1", "mypassword1");
+   ...
+   ```
 
 ## Path
 
